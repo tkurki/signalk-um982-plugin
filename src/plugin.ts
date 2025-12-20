@@ -106,7 +106,7 @@ const pluginFactory: PluginConstructor = function (app: ServerAPI): Plugin {
           },
           ...NtripOptionsSchema.properties,
         },
-        required: [...NtripOptionsSchema.required, "serialconnection"]
+        required: ["serialconnection"]
       };
 
       //add current value to enum if not present
@@ -453,35 +453,42 @@ function validateConfiguration(obj: any): obj is Configuration {
     return false;
   }
 
-  // Check required string properties
-  if (
-    // typeof obj.serialDevice !== 'string' ||
-    typeof obj.host !== 'string' ||
-    typeof obj.mountpoint !== 'string' ||
-    typeof obj.username !== 'string' ||
-    typeof obj.password !== 'string') {
-    return false;
+  // Only validate NTRIP configuration if NTRIP is enabled
+  if (obj.ntripEnabled === true) {
+    // Check required string properties for NTRIP
+    if (
+      typeof obj.host !== 'string' ||
+      typeof obj.mountpoint !== 'string' ||
+      typeof obj.username !== 'string' ||
+      typeof obj.password !== 'string') {
+      return false;
+    }
+
+    // Check required number properties for NTRIP
+    if (typeof obj.port !== 'number' ||
+      typeof obj.interval !== 'number' ||
+      typeof obj.latitude !== 'number' ||
+      typeof obj.longitude !== 'number') {
+      return false;
+    }
+
+    // Check that numbers are valid for NTRIP
+    if (!Number.isFinite(obj.port) || obj.port <= 0 ||
+      !Number.isFinite(obj.interval) || obj.interval <= 0 ||
+      !Number.isFinite(obj.latitude) ||
+      !Number.isFinite(obj.longitude)) {
+      return false;
+    }
+
+    // Check latitude/longitude ranges for NTRIP
+    if (obj.latitude < -90 || obj.latitude > 90 ||
+      obj.longitude < -180 || obj.longitude > 180) {
+      return false;
+    }
   }
 
-  // Check required number properties
-  if (typeof obj.port !== 'number' ||
-    typeof obj.interval !== 'number' ||
-    typeof obj.latitude !== 'number' ||
-    typeof obj.longitude !== 'number') {
-    return false;
-  }
-
-  // Check that numbers are valid
-  if (!Number.isFinite(obj.port) || obj.port <= 0 ||
-    !Number.isFinite(obj.interval) || obj.interval <= 0 ||
-    !Number.isFinite(obj.latitude) ||
-    !Number.isFinite(obj.longitude)) {
-    return false;
-  }
-
-  // Check latitude/longitude ranges
-  if (obj.latitude < -90 || obj.latitude > 90 ||
-    obj.longitude < -180 || obj.longitude > 180) {
+  // Always validate serial connection is provided
+  if (typeof obj.serialconnection !== 'string' || obj.serialconnection.trim() === '') {
     return false;
   }
 
