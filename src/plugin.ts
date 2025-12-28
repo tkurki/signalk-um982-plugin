@@ -216,17 +216,20 @@ const parseNmeaSentence = (compleSentence: string, handleMessage: any) => {
     case '#BESTSATA':
       parser = bestSatParser
       break
-    // case '$GNHPR':
-    //   parser = hprParser
-    //   break
+    case '$GNHPR':
+      parser = hprParser
+      break
     case '$CONFIG':
       parser = configParser
       break
+    default:
+      return;
   }
+  // NOTE changed UNIHEADINGA parser to use 2nd param
   const values = parser(parts, compleSentence.split('*')[0]);
-  if (values.length) {
+  if (values.length) {    
     // console.log(sentence)
-    // console.log(values)
+    // console.log(values)   
     handleMessage({
       updates: [{
         values
@@ -377,38 +380,59 @@ const bestSatParser = (parts: string[], sentence: string) => {
 
 const CONVERTERS = {
   UNIHEADINGA: [
-    { index: 8, path: 'sensors.rtk.solutionStatus', convert: (v: string) => v },
-    { index: 9, path: 'sensors.rtk.positionType', convert: (v: string) => v },
-    { index: 10, path: 'sensors.rtk.baselineLength', convert: (v: string) => parseFloat(v) },
+    { index: 0, path: 'sensors.rtk.solutionStatus', convert: (v: string) => v },
+    { index: 1, path: 'sensors.rtk.positionType', convert: (v: string) => v },
+    { index: 2, path: 'sensors.rtk.baselineLength', convert: (v: string) => parseFloat(v) },
     {
-      index: 11, path: 'navigation.headingTrue', convert: (v: string) => {
+      index: 3, path: 'navigation.headingTrue', convert: (v: string) => {
         if (v === '0.0000') return null;
         return ((parseFloat(v) + 90) % 360) * Math.PI / 180
       }
     },
-    // { index: 11, path: 'navigation.headingTruedeg', convert: (v: string) => parseFloat(v) + 90 },
-    { index: 12, path: 'navigation.attitude.pitch', convert: (v: string) => parseFloat(v) * Math.PI / 180 },
-    { index: 14, path: 'navigation.positionHdop', convert: (v: string) => parseFloat(v) },
-    { index: 15, path: 'navigation.positionVdop', convert: (v: string) => parseFloat(v) },
-    { index: 17, path: 'navigation.satellites.inView', convert: (v: string) => parseInt(v, 10) },
-    { index: 18, path: 'navigation.satellites.used', convert: (v: string) => parseInt(v, 10) },
-    { index: 19, path: 'navigation.satellites.GPS', convert: (v: string) => parseInt(v, 10) },
-    { index: 20, path: 'navigation.satellites.GLONASS', convert: (v: string) => parseInt(v, 10) },
-    { index: 21, path: 'navigation.satellites.GALILEO', convert: (v: string) => parseInt(v, 10) },
-    { index: 23, path: 'navigation.position.age', convert: (v: string) => parseFloat(v) },
-    { index: 24, path: 'navigation.position.dgpsAge', convert: (v: string) => parseFloat(v) }
+    // { index: 3, path: 'navigation.headingTruedeg', convert: (v: string) => parseFloat(v) + 90 },
+    { index: 4, path: 'navigation.attitude.pitch', convert: (v: string) => parseFloat(v) * Math.PI / 180 },
+    { index: 6, path: 'navigation.positionHdop', convert: (v: string) => parseFloat(v) },
+    { index: 7, path: 'navigation.positionVdop', convert: (v: string) => parseFloat(v) },
+    { index: 9, path: 'navigation.satellites.inView', convert: (v: string) => parseInt(v, 10) },
+    { index: 10, path: 'navigation.satellites.used', convert: (v: string) => parseInt(v, 10) },
+    { index: 11, path: 'navigation.satellites.GPS', convert: (v: string) => parseInt(v, 10) },
+    { index: 12, path: 'navigation.satellites.GLONASS', convert: (v: string) => parseInt(v, 10) },
+    { index: 13, path: 'navigation.satellites.GALILEO', convert: (v: string) => parseInt(v, 10) },
+    { index: 15, path: 'navigation.position.age', convert: (v: string) => parseFloat(v) },
+    { index: 16, path: 'navigation.position.dgpsAge', convert: (v: string) => parseFloat(v) }
   ]
 }
 const POSITION_TYPE_INDEX = CONVERTERS.UNIHEADINGA.findIndex(c => c.path === 'sensors.rtk.positionType');
 const HEADING_TRUE_INDEX = CONVERTERS.UNIHEADINGA.findIndex(c => c.path === 'navigation.headingTrue');
 
-const uniheadingAParser = (parts: string[]) => {
+// modified UNIHEADINGA parser to extract entire message header
+// (i.e. everything up to first semicolon)
+// which lets field indexes match UM982 documentation
+const uniheadingAParser = (parts: string[], sentence: string) => {
+  console.log('UNIHEADINGA received:', sentence);
+
+  // Split by semicolon first to separate header from data
+  const [headerSection, dataSection] = sentence.split(';');
+
+  if (!dataSection) {
+    console.log('No data section found after semicolon');
+    return [];
+  }
+
+  // Parse data section by commas (remove checksum if present)
+  const dataFields = dataSection.split('*')[0].split(',');
+
+  console.log('UNIHEADINGA data fields:', dataFields);
+
   const parsed = CONVERTERS.UNIHEADINGA.map(c => ({
     path: c.path,
-    value: c.convert(parts[c.index + 1])
+    value: c.convert(dataFields[c.index])
   } as PathValue))
 
+  console.log('UNIHEADINGA parsed values:', parsed);
+
   if (parsed[POSITION_TYPE_INDEX].value === 'NONE') {
+    console.log('Position type is NONE, setting heading to null');
     parsed[HEADING_TRUE_INDEX].value = null;
   }
 
